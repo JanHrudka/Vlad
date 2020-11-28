@@ -5,6 +5,7 @@ from numpy import save
 import time
 import multiprocessing
 import glob
+import os
 
 
 class space:
@@ -118,6 +119,8 @@ class space:
             n = '00' + str(n)
         elif n < 100:
             n = '0' + str(n)
+        else:
+            n = str(n)
 
         points = np.array([])
         for cellx in self.cells:
@@ -158,17 +161,20 @@ class cell:
         for particle in self.particles:
             #interakce castice s ostatnimi v bunce
             for other_particle in (other_particle for other_particle in self.particles if particle is not other_particle):
-                r = np.linalg.norm(particle.coordinates - other_particle.coordinates)*10
-                di = (particle.coordinates - other_particle.coordinates)*10 / r
-                particle.F = particle.F + self.LJ_force(r = r)*di
+                r = np.linalg.norm(particle.coordinates - other_particle.coordinates)
+                if r > 0.25:
+                    di = -(particle.coordinates - other_particle.coordinates) / r
+                    particle.F = particle.F + self.LJ_force(r = r)*di
+                else:
+                    particle.v = particle.v*0.9
 
             #interakce castice s ostatnimi bunkami
             for cellx in space.cells:
                 for celly in cellx:
                     for cellz in (cellz for cellz in celly if cellz is not self):
-                        r = np.linalg.norm(particle.coordinates - cellz.centroid)*10
-                        di = (particle.coordinates - cellz.centroid)*10 / r
-                        particle.F = particle.F + self.LJ_force(r = r)*di*len(cellz.particles)
+                        r = np.linalg.norm(particle.coordinates - cellz.centroid)
+                        di = -(particle.coordinates - cellz.centroid) / r
+                        particle.F = particle.F + self.LJ_force(r = r)*di*cellz.m
 
     def aplly_forces(self, dt):
         #aplikace sil 
@@ -179,11 +185,11 @@ class cell:
         #kontrola prislusnosti castic
         for particle in self.particles:
             if not self.x == int(particle.coordinates[0]) or not self.y == int(particle.coordinates[1]) or not self.z == int(particle.coordinates[2]):
-                try:
+                if int(particle.coordinates[0]) >= space.x_max or int(particle.coordinates[0]) < space.x_min or int(particle.coordinates[1]) >= space.y_max or int(particle.coordinates[1]) < space.y_min or int(particle.coordinates[2]) >= space.z_max or int(particle.coordinates[2]) < space.z_min:
                     self.particles.remove(particle)
+                else:
                     space.cells[int(particle.coordinates[0])][int(particle.coordinates[1])][int(particle.coordinates[2])].particles.append(particle)
-                except:
-                    pass
+                    self.particles.remove(particle)
 
     def LJ_force(self, r):
         #
@@ -232,20 +238,20 @@ class setuper:
 def main():
     #
     start = time.perf_counter()
-    Space = space(x_min = 0, x_max = 5, y_min = 0, y_max = 5, z_min = 0, z_max = 60, N = 1000)
+    Space = space(x_min = 0, x_max = 5, y_min = 0, y_max = 5, z_min = 0, z_max = 15, N = 2250)
     end = time.perf_counter()
     print('\n', f'Done in {end - start}')
 
-    T = 1000; dt = 0.01; t = 0
+    T = 10000; dt = 0.00000001; t = 0
     while(T >= t):
-        Space.update(dt = dt, t = t/100)
+        Space.update(dt = dt, t = t*dt)
         t = t + 1
-        if t % 10 == 0:
+        if t % 50 == 0:
             Space.Save()
 
 def Check():
-    #
-    pass
+    for f in glob.glob('Out/po*'):
+        os.remove(f)
 
 def Help():
     #
